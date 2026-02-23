@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 // HTTPClient sends protobuf messages to the ingestor via HTTP POST

@@ -7,7 +7,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/disk"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 // DiskCollector collects disk metrics

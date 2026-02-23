@@ -11,7 +11,7 @@ import (
 	"github.com/mitori-app/mitori-agent/internal/collectors"
 	"github.com/mitori-app/mitori-agent/internal/config"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 const (

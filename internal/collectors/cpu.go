@@ -5,7 +5,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/cpu"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 // CPUCollector collects CPU metrics

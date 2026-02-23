@@ -5,7 +5,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/host"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 // SystemCollector collects system information

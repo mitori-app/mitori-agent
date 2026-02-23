@@ -8,7 +8,7 @@ import (
 
 	"github.com/shirou/gopsutil/v4/net"
 
-	pb "github.com/mitori-app/mitori-agent/internal/proto/gen"
+	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
 // NetworkCollector collects network metrics

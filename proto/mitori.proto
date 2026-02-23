@@ -4,7 +4,7 @@ package mitori.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/mitori-app/mitori-agent/internal/proto/gen";
+option go_package = "github.com/mitori-app/mitori-agent/proto/gen";
 
 message AgentMessage {
   string agent_version = 1;

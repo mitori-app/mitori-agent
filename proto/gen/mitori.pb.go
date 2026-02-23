@@ -1331,7 +1331,7 @@ const file_mitori_proto_rawDesc = "" +
 	"\x05limit\x18\x05 \x01(\x04R\x05limit\"f\n" +
 	"\x12DockerNetworkStats\x12'\n" +
 	"\x10rx_bytes_per_sec\x18\x14 \x01(\x01R\rrxBytesPerSec\x12'\n" +
-	"\x10tx_bytes_per_sec\x18\x18 \x01(\x01R\rtxBytesPerSecB7Z5github.com/mitori-app/mitori-agent/internal/proto/genb\x06proto3"
+	"\x10tx_bytes_per_sec\x18\x18 \x01(\x01R\rtxBytesPerSecB.Z,github.com/mitori-app/mitori-agent/proto/genb\x06proto3"
 
 var (
 	file_mitori_proto_rawDescOnce sync.Once
