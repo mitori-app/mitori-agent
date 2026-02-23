@@ -1,13 +1,16 @@
 # Mitori Agent Install Script (Windows)
-# Usage: $env:MITORI_API_KEY = "<key>"; irm https://app.mitori.dev/install.ps1 | iex
-#    or: $env:MITORI_API_KEY = "<key>"; .\install.ps1
+# Usage: $env:MITORI_INSTALL_TOKEN = "<token>"; irm https://raw.githubusercontent.com/mitori-app/mitori-agent/main/install.ps1 | iex
+#    or: $env:MITORI_INSTALL_TOKEN = "<token>"; .\install.ps1
 #
 # What this script does:
-#   1. Calls the Mitori registration API to obtain a hostId + hostToken
-#   2. Writes the hostId + config to %ProgramData%\Mitori\config.yaml
-#   3. Stores the hostToken in Windows Credential Manager (readable by go-keyring)
+#   1. Detects system architecture
+#   2. Downloads the latest release from GitHub
+#   3. Calls the Mitori registration API using the one-time install token
+#   4. Writes the hostId + config to %ProgramData%\Mitori\config.yaml
+#   5. Stores the host API key in a secure file
+#   6. Installs and starts the agent as a Windows service
 #
-# After running this script, start the agent binary. It will read these files automatically.
+# After running this script, the agent will be running as a Windows service.
 # Requires: PowerShell 5+ and Administrator privileges.
 
 #Requires -RunAsAdministrator
@@ -17,17 +20,17 @@ $ErrorActionPreference = 'Stop'
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
-$MitoriApiUrl    = if ($env:MITORI_API_URL) { $env:MITORI_API_URL } else { 'https://app.mitori.dev' }
+$MitoriApiUrl     = if ($env:MITORI_API_URL) { $env:MITORI_API_URL } else { 'https://app.mitori.dev' }
 $RegisterEndpoint = "$MitoriApiUrl/api/register"
+$GitHubRepo       = 'mitori-app/mitori-agent'
+$GitHubReleaseUrl = "https://github.com/$GitHubRepo/releases/latest/download"
+$InstallDir       = Join-Path $env:ProgramFiles 'Mitori'
+$BinaryName       = 'mitori-agent.exe'
 
-# go-keyring stores credentials in Windows Credential Manager using this service name.
-# The agent Go code must use the same service + username to retrieve the token.
-$KeyringService  = 'mitori-agent'
-$KeyringUsername = 'host-token'
-
-# Config file path
+# Config file paths
 $ConfigDir  = Join-Path $env:ProgramData 'Mitori'
 $ConfigFile = Join-Path $ConfigDir 'config.yaml'
+$SecretFile = Join-Path $ConfigDir 'token'
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -43,14 +46,75 @@ function Exit-Error {
 
 # ── Checks ─────────────────────────────────────────────────────────────────────
 
-if (-not $env:MITORI_API_KEY) {
+if (-not $env:MITORI_INSTALL_TOKEN) {
   Exit-Error @"
-MITORI_API_KEY environment variable is not set.
+MITORI_INSTALL_TOKEN environment variable is not set.
 
-Get your API key from the Mitori dashboard, then run:
-  `$env:MITORI_API_KEY = '<your-key>'
+Get your install command from the Mitori dashboard (Add Server), then run:
+  `$env:MITORI_INSTALL_TOKEN = '<token>'
   .\install.ps1
 "@
+}
+
+# ── Detect Architecture ────────────────────────────────────────────────────────
+
+$Arch = if ([Environment]::Is64BitOperatingSystem) { 'amd64' } else { Exit-Error 'Only 64-bit Windows is supported' }
+
+# ── Download Latest Release ────────────────────────────────────────────────────
+
+Write-Host 'Downloading latest Mitori agent...' -ForegroundColor Cyan
+
+$BinaryFilename = "mitori-agent-windows-$Arch.exe"
+$DownloadUrl    = "$GitHubReleaseUrl/$BinaryFilename"
+$ChecksumUrl    = "$DownloadUrl.sha256"
+
+Write-Host "Downloading $BinaryFilename..."
+
+# Create temp directory
+$TempDir = Join-Path $env:TEMP "mitori-install-$(Get-Random)"
+New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
+
+try {
+  # Download binary
+  $TempBinary = Join-Path $TempDir $BinaryName
+  Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempBinary -UseBasicParsing -TimeoutSec 60
+
+  # Download checksum
+  $TempChecksum = Join-Path $TempDir 'checksum.sha256'
+  Invoke-WebRequest -Uri $ChecksumUrl -OutFile $TempChecksum -UseBasicParsing -TimeoutSec 15
+
+  # Verify checksum
+  Write-Host 'Verifying checksum...'
+  $ExpectedHash = (Get-Content $TempChecksum).Split(' ')[0]
+  $ActualHash = (Get-FileHash -Path $TempBinary -Algorithm SHA256).Hash.ToLower()
+
+  if ($ExpectedHash -ne $ActualHash) {
+    Exit-Error 'Checksum verification failed'
+  }
+
+  Write-Green '✓ Binary downloaded and verified'
+
+  # Install binary
+  if (-not (Test-Path $InstallDir)) {
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+  }
+
+  $FinalBinary = Join-Path $InstallDir $BinaryName
+
+  # Stop service if running
+  $ServiceName = 'MitoriAgent'
+  $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+  if ($Service) {
+    Write-Host 'Stopping existing service...'
+    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+  }
+
+  Copy-Item -Path $TempBinary -Destination $FinalBinary -Force
+  Write-Green '✓ Binary installed'
+
+} finally {
+  Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # ── Existing Config? (preserve hostId on re-install) ──────────────────────────
@@ -77,7 +141,7 @@ Write-Host "Registering host: $HostHostname" -ForegroundColor Cyan
 Write-Host "Contacting Mitori API at $RegisterEndpoint ..."
 
 $Headers = @{
-  'Authorization' = "Bearer $env:MITORI_API_KEY"
+  'Authorization' = "Bearer $env:MITORI_INSTALL_TOKEN"
   'Content-Type'  = 'application/json'
 }
 
@@ -103,7 +167,7 @@ try {
   if ($StatusCode -eq 404 -and $ExistingHostId) {
     Write-Yellow "Host $ExistingHostId not found in Mitori. Clearing config and registering as a new host..."
     Remove-Item -Path $ConfigFile -Force -ErrorAction SilentlyContinue
-    cmdkey /delete:"$KeyringService/$KeyringUsername" 2>$null | Out-Null
+    Remove-Item -Path $SecretFile -Force -ErrorAction SilentlyContinue
     $ExistingHostId = $null
     $Body = [System.Text.Encoding]::UTF8.GetBytes("{`"hostname`": `"$HostHostname`"}")
     try {
@@ -132,11 +196,11 @@ if ($Response.StatusCode -ne 200) {
 
 $Parsed = $Response.Content | ConvertFrom-Json
 $HostId      = $Parsed.hostId
-$HostToken   = $Parsed.hostToken
+$HostApiKey  = $Parsed.hostApiKey
 $IngestorUrl = $Parsed.ingestorUrl
 
-if (-not $HostId -or -not $HostToken -or -not $IngestorUrl) {
-  Exit-Error "Failed to parse hostId/hostToken/ingestorUrl from API response: $($Response.Content)"
+if (-not $HostId -or -not $HostApiKey -or -not $IngestorUrl) {
+  Exit-Error "Failed to parse hostId/hostApiKey/ingestorUrl from API response: $($Response.Content)"
 }
 
 # ── Write Config File ──────────────────────────────────────────────────────────
@@ -168,32 +232,73 @@ hostname: "$HostHostname"
 ingestorUrl: "$IngestorUrl"
 "@ | Set-Content -Path $ConfigFile -Encoding UTF8
 
-# ── Store Token in Windows Credential Manager ──────────────────────────────────
-# go-keyring reads from Windows Credential Manager using service + username as the target name.
-# Target format used by go-keyring: "<service>/<username>"
+# ── Write Secret File ──────────────────────────────────────────────────────────
 
-$CredentialTarget = "$KeyringService/$KeyringUsername"
+$HostApiKey | Set-Content -Path $SecretFile -NoNewline -Encoding UTF8
 
-# Remove any existing credential for this target
-cmdkey /delete:"$CredentialTarget" 2>$null | Out-Null
+# Restrict secret file to Administrators + SYSTEM only
+$Acl = New-Object System.Security.AccessControl.FileSecurity
+$Acl.SetAccessRuleProtection($true, $false)
+$AdminRule  = New-Object System.Security.AccessControl.FileSystemAccessRule(
+  'BUILTIN\Administrators', 'FullControl', 'None', 'None', 'Allow')
+$SystemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+  'NT AUTHORITY\SYSTEM', 'FullControl', 'None', 'None', 'Allow')
+$Acl.AddAccessRule($AdminRule)
+$Acl.AddAccessRule($SystemRule)
+Set-Acl -Path $SecretFile -AclObject $Acl
 
-# Store the new token
-$Result = cmdkey /generic:"$CredentialTarget" /user:"$KeyringUsername" /pass:"$HostToken"
-if ($LASTEXITCODE -ne 0) {
-  Exit-Error "Failed to store token in Windows Credential Manager: $Result"
+# ── Install Windows Service ────────────────────────────────────────────────────
+
+Write-Host 'Installing Windows service...' -ForegroundColor Cyan
+
+$ServiceName = 'MitoriAgent'
+$ServiceDisplayName = 'Mitori Monitoring Agent'
+$ServiceDescription = 'Collects system metrics and sends them to Mitori'
+
+# Remove existing service if it exists
+$ExistingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($ExistingService) {
+  Write-Host 'Removing existing service...'
+  Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+  sc.exe delete $ServiceName | Out-Null
+  Start-Sleep -Seconds 1
 }
+
+# Create new service using sc.exe (New-Service doesn't support auto-restart)
+$BinaryPath = Join-Path $InstallDir $BinaryName
+sc.exe create $ServiceName binPath= $BinaryPath start= auto DisplayName= $ServiceDisplayName | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+  Exit-Error "Failed to create Windows service"
+}
+
+# Set service description
+sc.exe description $ServiceName $ServiceDescription | Out-Null
+
+# Configure service to restart on failure
+sc.exe failure $ServiceName reset= 86400 actions= restart/10000/restart/10000/restart/10000 | Out-Null
+
+# Start the service
+Write-Host 'Starting service...'
+Start-Service -Name $ServiceName
+
+Write-Green '✓ Service installed and started'
+Write-Host "  Status: Get-Service -Name $ServiceName"
+Write-Host "  Logs:   Get-EventLog -LogName Application -Source $ServiceName -Newest 50"
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 
 Write-Green ""
 if ($ExistingHostId) {
-  Write-Green "Mitori agent re-registered successfully! (hostId preserved)"
+  Write-Green "✓ Mitori agent installed and running! (hostId preserved)"
 } else {
-  Write-Green "Mitori agent registered successfully!"
+  Write-Green "✓ Mitori agent installed and running!"
 }
 Write-Green ""
 Write-Host "  Host ID    : $HostId"
 Write-Host "  Config     : $ConfigFile"
-Write-Host "  Token      : stored in Windows Credential Manager ('$CredentialTarget')"
+Write-Host "  Token file : $SecretFile"
+Write-Host "  Binary     : $BinaryPath"
 Write-Green ""
-Write-Host "Next: start the Mitori agent binary to begin sending metrics."
+Write-Host "The agent is now running as a Windows service and will start automatically on boot."
