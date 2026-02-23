@@ -14,9 +14,13 @@ import (
 	pb "github.com/mitori-app/mitori-agent/proto/gen"
 )
 
+var (
+	// version is set via ldflags at build time
+	version = "dev"
+)
+
 const (
 	snapshotInterval = 15 * time.Second
-	agentVersion     = "1.0.0"
 )
 
 func main() {
@@ -29,7 +33,7 @@ func main() {
 	}
 	slog.SetDefault(slog.New(handler))
 
-	slog.Info("Mitori agent starting", "version", agentVersion)
+	slog.Info("Mitori agent starting", "version", version)
 
 	// Load config + token from platform-specific paths
 	cfg, err := config.Load()
@@ -153,7 +157,7 @@ func sendSnapshot(
 
 	// Build AgentMessage
 	agentMsg := &pb.AgentMessage{
-		AgentVersion: agentVersion,
+		AgentVersion: version,
 		HostId:       hostID,
 		Payload: &pb.AgentMessage_SystemSnapshot{
 			SystemSnapshot: snapshot,
