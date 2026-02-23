@@ -1,0 +1,285 @@
+syntax = "proto3";
+
+package mitori.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mitori-app/mitori-agent/internal/proto/gen";
+
+message AgentMessage {
+  string agent_version = 1;
+  string host_id = 2; // Unique host identifier (e.g., "srv_abc123xyz")
+
+  oneof payload {
+    SystemSnapshot system_snapshot = 10; // Full system snapshot (sent every heartbeat)
+  }
+}
+
+message SystemSnapshot {
+  google.protobuf.Timestamp timestamp = 2;
+  HostStat host_stat = 3;
+  repeated CPUStat cpu_stats = 4;
+  repeated CPUTimeStat cpu_time_stats = 5;
+  CPUCombinedStat cpu_combined_stats = 6;
+  MemoryStat memory_stats = 7;
+  repeated DiskStat disk_stats = 8;
+  repeated NetworkInterfaceStat network_interface_stats = 9;
+
+  repeated DockerContainer docker_containers = 20;
+}
+
+message HostStat {
+  string hostname = 1;
+  uint64 uptime = 2;
+  //uint64 boot_time = 3;
+  //uint64 procs = 4;
+  string os = 5;
+  string platform = 6;
+  //string platform_family = 7;
+  string platform_version = 8;
+  //string kernel_version = 9;
+  string kernel_arch = 10;
+  //string virtualization_system = 11;
+  //string virtualization_role = 12;
+  //string host_id = 13;
+}
+
+// Per CPU info
+// May be one per physical CPU or virtual heavily depends on OS and ahrdware
+message CPUStat {
+  int32 cpu_id = 1;
+
+  // Static metadata
+  string vendor_id = 2;
+  string family = 3;
+  string model = 4;
+  //int32 stepping = 5;
+  //string physical_id = 6;
+  //string core_id = 7;
+  int32 cores = 8;
+  string model_name = 9;
+  double mhz = 10;
+  //int32 cache_size = 11;
+  //string flags = 12;
+  //string microcode = 13;
+}
+
+//Stat for aggregate CPU information
+message CPUCombinedStat {
+  double cpu_total_percent = 1;
+}
+
+//CPU Time Stats (usually per core)
+message CPUTimeStat {
+  string cpu_id = 1;
+  //double user = 2;
+  //double system = 3;
+  //double idle = 4;
+  //double nice = 5;
+  //double iowait = 6;
+  //double irq = 7;
+  //double soft_irq = 8;
+  //double steal = 9;
+  //double guest = 10;
+  //double guest_nice = 11;
+  
+  //Percents
+  double percent = 20;
+}
+
+// Memory metrics
+message MemoryStat {
+  uint64 total = 1;
+  uint64 available = 2;
+  //uint64 used = 3;
+  //uint64 free = 4;
+  double used_percent = 5;
+  //OSX BSD
+  //uint64 active = 6;
+  //uint64 inactive = 7;
+  //uint64 wired = 8;
+  //uint64 laundry = 9;
+  //LINUX
+  // uint64 buffers = 10;
+  // uint64 cached = 11;
+  // uint64 write_back = 12;
+  // uint64 dirty = 13;
+  // uint64 write_back_tmp = 14;
+  // uint64 shared = 15;
+  // uint64 slab = 16;
+  // uint64 sreclaimable = 17;
+  // uint64 sunreclaim = 18;
+  // uint64 page_tables = 19;
+  // uint64 swap_cached = 20;
+  // uint64 commit_limit = 21;
+  // uint64 committed_as = 22;
+  // uint64 high_total = 23;
+  // uint64 high_free = 24;
+  // uint64 low_total = 25;
+  // uint64 low_free = 26;
+  // uint64 swap_total = 27;
+  // uint64 swap_free = 28;
+  // uint64 mapped = 29;
+  // uint64 vmalloc_total = 30;
+  // uint64 vmalloc_used = 31;
+  // uint64 vmalloc_chunk = 32;
+  // uint64 huge_pages_total = 33;
+  // uint64 huge_pages_free = 34;
+  // uint64 huge_pages_rsvd = 35;
+  // uint64 huge_pages_surp = 36;
+  // uint64 huge_page_size = 37;
+  // uint64 anon_huge_pages = 38;
+}
+
+// Disk metrics per mount point
+message DiskStat {
+  string device = 1;
+  string mount_point = 2;
+  string fstype = 3;
+  //repeated string opts = 4;
+
+  uint64 total = 4;
+  uint64 free = 6;
+  //uint64 used = 5;
+  double used_percent = 7;
+  // uint64 inodes_total = 8;
+  // uint64 inodes_used = 9;
+  // uint64 inodes_free = 10;
+  // double inodes_used_percent = 11;
+}
+
+// Network metrics per interface
+message NetworkInterfaceStat {
+  int32 index = 1;
+  int32 mtu = 2;
+  string name = 3;
+  //string hardware_addr = 4;
+  //repeated string flags = 5;
+  //string hardware_addr = 6;
+  repeated string addrs = 7;
+
+  //uint64 bytes_sent = 20;
+  //uint64 bytes_recv = 21;
+  // uint64 packets_sent = 22;
+  // uint64 packets_recv = 23;
+  // uint64 err_in = 24;
+  // uint64 err_out = 25;
+  // uint64 drop_in = 26;
+  // uint64 drop_out = 27;
+  // uint64 fifo_in = 26;
+  // uint64 fifo_out = 27;
+
+  double bytes_sent_per_sec = 40;
+  double bytes_recv_per_sec = 41;
+  // uint64 packets_sent_per_sec = 42;
+  // uint64 packets_recv_per_sec = 43;
+  // uint64 err_in_per_sec = 44;
+  // uint64 err_out_per_sec = 45;
+  // uint64 drop_in_per_sec = 46;
+  // uint64 drop_out_per_sec = 47;
+  // uint64 fifo_in_per_sec = 46;
+  // uint64 fifo_out_per_sec = 47;
+}
+
+
+
+//https://pkg.go.dev/github.com/docker/docker@v28.5.2+incompatible/api/types/container#Summary
+message DockerContainer {
+  string container_id = 1;
+  repeated string names = 2;
+  string image = 3;
+  //string image_id = 4;
+  //string command = 5;
+  int64 created = 6;
+  repeated DockerPort ports = 7;
+  //int64 size_rw = 8;
+  //int64 size_root_fs = 9;
+  //map<string, string> labels = 10;
+  string state = 11;
+  string status = 12;
+  //HostConfig host_config 13;
+  //NetworkSettings network_settings = 14;
+  repeated DockerMountPoint mounts = 15;
+
+  // Performance stats
+  DockerCPUStats cpu_stats = 20;
+  DockerMemoryStats memory_stats = 21;
+  map<string, DockerNetworkStats> networks = 22;
+}
+
+// Docker port mapping (mirrors container.Port)
+message DockerPort {
+  string ip = 1; // Host IP address
+  uint32 private_port = 2; // Port on container
+  uint32 public_port = 3; // Port on host
+  string type = 4; // Protocol (tcp/udp)
+}
+
+//https://pkg.go.dev/github.com/docker/docker@v28.5.2+incompatible/api/types/container#MountPoint
+message DockerMountPoint {
+  //string type = 1;
+  string name = 2;
+  string source = 3;
+  string destination = 4;
+  string driver = 5;
+  //bool rw = 7;
+  //string propagation = 8;
+}
+
+// Docker CPU stats (mirrors container.CPUStats)
+message DockerCPUStats {
+  DockerCPUUsage cpu_usage = 1;
+  uint64 system_cpu_usage = 2; // System-wide CPU usage
+  uint32 online_cpus = 3; // Number of online CPUs
+  //reserved 4;  // throttling_data
+}
+
+// Docker CPU usage (mirrors container.CPUUsage)
+message DockerCPUUsage {
+  uint64 total_usage = 1; // Total CPU time in nanoseconds
+  //repeated uint64 percpu_usage = 2; // Per-CPU usage
+  //uint64 usage_in_kernelmode = 3;
+  //uint64 usage_in_usermode = 4;
+}
+
+// Docker memory stats (mirrors container.MemoryStats)
+message DockerMemoryStats {
+  uint64 usage = 1; // Current memory usage
+  //reserved 2;                       // max_usage
+  //reserved 3;                       // stats
+  //reserved 4;                       // failcnt
+  uint64 limit = 5; // Memory limit
+
+}
+
+// https://pkg.go.dev/github.com/docker/docker@v28.5.2+incompatible/api/types/container#Summary
+message DockerNetworkStats {
+  //uint64 rx_bytes = 1; // Bytes received
+  //reserved 2;                       // rx_packets
+  //reserved 3;                       // rx_errors
+  //reserved 4;                       // rx_dropped
+  //uint64 tx_bytes = 2; // Bytes sent
+  //reserved 5;                       // tx_packets
+  //reserved 6;                       // tx_errors
+  //reserved 7;                       // tx_dropped
+  //reserved 8;                       // endpoint_id
+  //reserved 9;                       // instance_id
+
+  // For per-second rates, we can calculate these on the agent side by comparing with previous stats and dividing by the time difference.
+  double rx_bytes_per_sec = 20;
+  //reserved 21;                       // rx_packets_per_sec
+  //reserved 22;                       // rx_errors_per_sec
+  //reserved 23;                       // rx_dropped_per_sec
+  double tx_bytes_per_sec = 24;
+  //reserved 25;                       // tx_packets_per_sec
+  //reserved 26;                       // tx_errors_per_sec
+  //reserved 27;                       // tx_dropped_per_sec
+}
+
+// Not working on linux
+// message DockerStorageStat {
+//   uint64 read_count_normalized = 1;
+//   uint64 read_size_bytes = 2;
+//   uint64 write_count_normalized = 3;
+//   uint64 write_size_bytes = 4;
+// }
