@@ -108,23 +108,30 @@ printf 'Downloading %s...\n' "$BINARY_FILENAME"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-# Download binary
-curl -sSL --max-time 60 -o "${TEMP_DIR}/${BINARY_NAME}" "${DOWNLOAD_URL}" || \
+# Download binary (use the same filename as in the checksum file)
+curl -sSL --max-time 60 -o "${TEMP_DIR}/${BINARY_FILENAME}" "${DOWNLOAD_URL}" || \
   die "Failed to download binary from ${DOWNLOAD_URL}"
 
 # Download and verify checksum
-curl -sSL --max-time 15 -o "${TEMP_DIR}/${BINARY_NAME}.sha256" "${CHECKSUM_URL}" || \
+curl -sSL --max-time 15 -o "${TEMP_DIR}/${BINARY_FILENAME}.sha256" "${CHECKSUM_URL}" || \
   die "Failed to download checksum"
 
 printf 'Verifying checksum...\n'
-(cd "$TEMP_DIR" && sha256sum -c "${BINARY_NAME}.sha256" 2>/dev/null | grep -q OK) || \
-  die "Checksum verification failed"
+if command -v sha256sum >/dev/null 2>&1; then
+  # Linux
+  (cd "$TEMP_DIR" && sha256sum -c "${BINARY_FILENAME}.sha256" 2>/dev/null | grep -q OK) || \
+    die "Checksum verification failed"
+else
+  # macOS
+  (cd "$TEMP_DIR" && shasum -a 256 -c "${BINARY_FILENAME}.sha256" 2>/dev/null | grep -q OK) || \
+    die "Checksum verification failed"
+fi
 
 green "✓ Binary downloaded and verified"
 
 # Install binary
 printf 'Installing to %s/%s...\n' "$INSTALL_DIR" "$BINARY_NAME"
-install -m 755 "${TEMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+install -m 755 "${TEMP_DIR}/${BINARY_FILENAME}" "${INSTALL_DIR}/${BINARY_NAME}"
 
 green "✓ Binary installed"
 
